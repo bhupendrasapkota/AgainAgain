@@ -1,33 +1,54 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.utils.translation import gettext_lazy as _
 from .models import User
 
 
 class UserAdmin(BaseUserAdmin):
     """Manages both user authentication and profile fields in the admin panel."""
     
-    list_display = ('username', 'email', 'full_name', 'followers_count','following_count', 'is_admin', 'is_staff', 'is_active')
-    list_filter = ('is_admin', 'is_staff', 'is_active')
+    list_display = (
+        'username', 'email', 'full_name', 'role', 
+        'is_active', 'is_staff', 'date_joined'
+    )
+    list_filter = ('is_active', 'is_staff', 'role')
+    list_per_page = 25
 
     fieldsets = (
-        ('Authentication', {'fields': ('email', 'username', 'password')}),
-        ('Profile Info', {'fields': ('full_name', 'bio', 'profile_picture', 'about', 'contact', 'followers_count', 'following_count')}),
-        ('Permissions', {'fields': ('is_active', 'is_admin', 'is_staff', 'is_superuser')}),
-        ('Important Dates', {'fields': ('last_login', 'created_at', 'updated_at')}),
+        (None, {'fields': ('username', 'password')}),
+        (_('Personal info'), {
+            'fields': (
+                'email', 'full_name', 'bio', 'about',
+                'profile_picture', 'phone', 'website', 'location'
+            )
+        }),
+        (_('Role & Status'), {
+            'fields': ('role', 'is_active', 'is_staff', 'is_superuser')
+        }),
+        (_('Important dates'), {
+            'fields': ('last_login', 'date_joined')
+        }),
     )
 
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('email', 'username', 'password1', 'password2')},
-        ),
+            'fields': ('email', 'username', 'password1', 'password2', 'role'),
+        }),
     )
 
-    readonly_fields = ('last_login', 'created_at', 'updated_at', 'followers_count', 'following_count')
+    readonly_fields = (
+        'last_login', 'date_joined',
+    )
 
-    search_fields = ('email', 'username', 'full_name')
-    ordering = ('email',)
+    search_fields = ('username', 'email', 'full_name', 'phone')
+    ordering = ('-date_joined',)
     filter_horizontal = ()
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj:  # editing an existing object
+            return self.readonly_fields + ('username', 'email')
+        return self.readonly_fields
 
 # Register User with the structured UserAdmin
 admin.site.register(User, UserAdmin)
