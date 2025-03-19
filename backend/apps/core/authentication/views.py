@@ -33,6 +33,9 @@ class AuthViewSet(ViewSet):
     def register(self, request):
         """User Registration"""
         try:
+            # Debug print
+            print("Received registration data:", request.data)
+            
             serializer = RegisterSerializer(data=request.data)
             if serializer.is_valid():
                 user = serializer.save()
@@ -47,6 +50,9 @@ class AuthViewSet(ViewSet):
                     "refresh": str(refresh),
                     "user": self._get_user_response(user)
                 }, status=status.HTTP_201_CREATED)
+            
+            # Debug print
+            print("Validation errors:", serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"Registration error: {str(e)}")
@@ -64,10 +70,10 @@ class AuthViewSet(ViewSet):
                 email = serializer.validated_data["email"]
                 password = serializer.validated_data["password"]
 
-                # Check for too many login attempts
+                # Check for too many login attempts (using a default of 5 attempts)
                 cache_key = f"login_attempts_{email}"
                 attempts = cache.get(cache_key, 0)
-                if attempts >= settings.MAX_LOGIN_ATTEMPTS:
+                if attempts >= 5:  # Default max attempts
                     return Response(
                         {"error": "Too many login attempts. Please try again later."},
                         status=status.HTTP_429_TOO_MANY_REQUESTS
@@ -82,7 +88,7 @@ class AuthViewSet(ViewSet):
 
                 if not user.check_password(password):
                     # Increment failed login attempts
-                    cache.set(cache_key, attempts + 1, timeout=3600)
+                    cache.set(cache_key, attempts + 1, timeout=3600)  # 1 hour timeout
                     return Response(
                         {"error": "Invalid credentials"},
                         status=status.HTTP_401_UNAUTHORIZED
