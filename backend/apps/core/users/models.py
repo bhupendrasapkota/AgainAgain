@@ -175,3 +175,38 @@ def handle_profile_picture(sender, instance, **kwargs):
             logger.error(f"Error handling profile picture for user {instance.id}: {str(e)}")
             # Don't raise the exception to prevent user creation failure
             # but log it for debugging
+
+class UserFollow(models.Model):
+    """Model for user following relationships."""
+    follower = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='following',
+        help_text="The user who is following"
+    )
+    following = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='followers',
+        help_text="The user being followed"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('follower', 'following')
+        indexes = [
+            models.Index(fields=['follower', 'following']),
+            models.Index(fields=['created_at']),
+        ]
+        ordering = ['-created_at']
+
+    def clean(self):
+        if self.follower == self.following:
+            raise ValidationError("A user cannot follow themselves.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.follower.username} follows {self.following.username}"

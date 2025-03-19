@@ -9,11 +9,17 @@ from django.utils.translation import gettext_lazy as _
 from django.db import transaction
 import logging
 from apps.core.users.models import User
-from .serializers import ProfileSerializer, UserUpdateSerializer
+from .serializers import ProfileSerializer, UserUpdateSerializer, UserFollowSerializer
 from cloudinary.uploader import upload
 from .security import validate_image
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from django.contrib.auth import get_user_model
+from .models import UserFollow
 
 logger = logging.getLogger(__name__)
+
+User = get_user_model()
 
 class ProfileView(APIView):
     """Handles retrieving and updating user profile."""
@@ -118,3 +124,32 @@ class ProfileView(APIView):
                 {"error": _("Error updating profile. Please try again.")},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class UserFollowViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing user following relationships."""
+    serializer_class = UserFollowSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Get the queryset based on the action."""
+        if self.action == 'list':
+            return UserFollow.objects.filter(follower=self.request.user)
+        return UserFollow.objects.all()
+
+    def perform_create(self, serializer):
+        """Create a new follow relationship."""
+        serializer.save(follower=self.request.user)
+
+    @action(detail=False, methods=['get'])
+    def followers(self, request):
+        """Get the user's followers."""
+        followers = UserFollow.objects.filter(following=request.user)
+        serializer = self.get_serializer(followers, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def following(self, request):
+        """Get the users that the current user is following."""
+        following = UserFollow.objects.filter(follower=request.user)
+        serializer = self.get_serializer(following, many=True)
+        return Response(serializer.data)
