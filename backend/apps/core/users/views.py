@@ -54,76 +54,38 @@ class ProfileView(APIView):
     @transaction.atomic
     def patch(self, request):
         """Update user profile fields."""
-        try:
-            user = request.user
-            data = request.data.copy()
-
-            if "profile_picture" in request.FILES:
-                profile_file = request.FILES["profile_picture"]
-
-                # Validate file content
-                if not validate_image(profile_file):
-                    return Response(
-                        {"error": _("Invalid image format. Allowed formats: JPG, JPEG, PNG.")},
-                        status=status.HTTP_400_BAD_REQUEST
+        user = request.user
+        data = request.data.copy()
+        
+        if "profile_picture" in request.FILES:
+            profile_file = request.FILES["profile_picture"]
+            
+            if not validate_image(profile_file):
+                return Response(
+                    {"error": _("Invalid image format. Allowed formats: JPG, JPEG, PNG.")},
+                    status=status.HTTP_400_BAD_REQUEST
                     )
+            
+            upload_result = upload(
+                profile_file,
+                folder=f"Users/Profile_Picture/{user.username}/",
+                public_id=f"{user.username}",
+                overwrite=True,
+                invalidate=True,
+                resource_type="image",
+                format="jpg",
+                transformation=[
+                    {"width": 400, "height": 400, "crop": "fill", "gravity": "face", "quality": "auto"},
+                ]
+                )
+            
+            data["profile_picture"] = upload_result["secure_url"]
 
-                # Validate file size
-                if profile_file.size > settings.MAX_UPLOAD_SIZE:
-                    return Response(
-                        {"error": _("File size too large. Maximum size is 5MB.")},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-                try:
-                    upload_result = upload(
-                        profile_file,
-                        folder=f"Users/Profile_Picture/{user.username}/",
-                        public_id=f"{user.username}",
-                        overwrite=True,
-                        invalidate=True,
-                        resource_type="image",
-                        format="jpg",
-                        transformation=[
-                            {"width": 400, "height": 400, "crop": "fill", "gravity": "face", "quality": "auto"},
-                            {"radius": "max"}
-                        ]
-                    )
-                    data["profile_picture"] = upload_result["secure_url"]
-                except Exception as e:
-                    logger.error(f"Error uploading profile picture: {str(e)}")
-                    return Response(
-                        {"error": _("Error uploading profile picture. Please try again.")},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                    )
-
-            # Use UserUpdateSerializer for better validation
             serializer = UserUpdateSerializer(user, data=data, partial=True)
             if serializer.is_valid():
-                # Update user fields
-                for field, value in serializer.validated_data.items():
-                    setattr(user, field, value)
-                user.save()
-
-                # Clear cache
-                cache.delete(f"user_profile_{user.id}")
-                
-                # Get updated data
-                updated_data = ProfileSerializer(user).data
-                
-                return Response({
-                    "message": _("Profile updated successfully"),
-                    "data": updated_data
-                }, status=status.HTTP_200_OK)
-
+                User.objects.filter(id=user.id).update(**serializer.validated_data)
+                return Response(serializer.data, status=status.HTTP_200_OK)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-            
-        except Exception as e:
-            logger.error(f"Error updating profile: {str(e)}")
-            return Response(
-                {"error": _("Error updating profile. Please try again.")},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
 
 class UserFollowViewSet(viewsets.ModelViewSet):
     """ViewSet for managing user following relationships."""

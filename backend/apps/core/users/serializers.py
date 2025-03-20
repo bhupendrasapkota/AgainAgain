@@ -56,9 +56,11 @@ class ProfileSerializer(serializers.ModelSerializer):
         return value
 
 class UserUpdateSerializer(serializers.ModelSerializer):
+    profile_picture = serializers.CharField(required=False)
+    
     class Meta:
         model = User
-        fields = ["full_name", "bio", "about", "phone", "website", "location"]
+        fields = ["full_name", "bio","profile_picture", "about", "phone", "website", "location"]
         extra_kwargs = {
             'phone': {
                 'validators': [

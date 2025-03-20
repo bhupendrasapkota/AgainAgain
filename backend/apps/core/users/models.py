@@ -8,12 +8,10 @@ from django.core.files.uploadedfile import UploadedFile
 from django.conf import settings
 import uuid
 from cloudinary.models import CloudinaryField
-from PIL import Image, ImageDraw
+from PIL import Image
 import io
 import logging
 from datetime import datetime
-import cloudinary
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -105,76 +103,6 @@ class User(AbstractUser):
             raise ValidationError("Bio cannot exceed 500 characters")
         if self.about and len(self.about) > 1000:
             raise ValidationError("About cannot exceed 1000 characters")
-
-def process_profile_picture(image):
-    """Process and optimize the profile picture."""
-    try:
-        # Open the image
-        img = Image.open(image)
-        
-        # Convert to RGB if necessary
-        if img.mode in ('RGBA', 'LA'):
-            background = Image.new('RGB', img.size, (255, 255, 255))
-            background.paste(img, mask=img.split()[-1])
-            img = background
-        elif img.mode != 'RGB':
-            img = img.convert('RGB')
-
-        # Calculate new dimensions while maintaining aspect ratio
-        max_size = (400, 400)
-        img.thumbnail(max_size, Image.Resampling.LANCZOS)
-
-        # Create a circular mask
-        mask = Image.new('L', img.size, 0)
-        mask_draw = ImageDraw.Draw(mask)
-        mask_draw.ellipse((0, 0, img.size[0], img.size[1]), fill=255)
-
-        # Apply the mask
-        output = Image.new('RGB', img.size, (255, 255, 255))
-        output.paste(img, mask=mask)
-
-        # Save the processed image
-        output_buffer = io.BytesIO()
-        output.save(output_buffer, format='JPEG', quality=85, optimize=True)
-        output_buffer.seek(0)
-
-        return output_buffer
-    except Exception as e:
-        logger.error(f"Error processing profile picture: {str(e)}")
-        raise ValidationError(f"Error processing profile picture: {str(e)}")
-
-@receiver(post_save, sender=User)
-def handle_profile_picture(sender, instance, **kwargs):
-    """Handle profile picture processing after user save."""
-    if instance.profile_picture:
-        try:
-            # Get the current profile picture
-            current_picture = instance.profile_picture
-            
-            # Process the image
-            processed_image = process_profile_picture(current_picture)
-            
-            # Generate a unique filename
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"profile_{instance.id}_{timestamp}"
-            
-            # Upload the processed image
-            upload_result = cloudinary.uploader.upload(
-                processed_image,
-                folder="profile_pictures/",
-                public_id=filename,
-                resource_type="image",
-                overwrite=True
-            )
-            
-            # Update the user's profile picture with the processed version
-            instance.profile_picture = upload_result['secure_url']
-            instance.save(update_fields=['profile_picture'])
-            
-        except Exception as e:
-            logger.error(f"Error handling profile picture for user {instance.id}: {str(e)}")
-            # Don't raise the exception to prevent user creation failure
-            # but log it for debugging
 
 class UserFollow(models.Model):
     """Model for user following relationships."""
